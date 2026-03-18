@@ -389,20 +389,19 @@ export function handleSchemaQuery(dataset: ParsedDataset, query: string): QueryR
     { label: 'Date Fields', value: String(columns.filter(c => c.type === 'date').length), trend: 'neutral' },
   ];
 
-  const summary = `### 📋 DATASET BLUEPRINT: ${columnNames.length} DIMENSIONS DISCOVERED
-I have successfully mapped **${rowCount.toLocaleString()} records** across **${columnNames.length} critical variables**.
-
-**Architecture Summary:**
-- **Numerical Performance**: ${columns.filter(c => c.type === 'numeric').length} metrics are ready for aggregation.
-- **Time Intelligence**: ${columns.filter(c => c.type === 'date').length} date-points detected for trend analysis.
-- **Categorical Grain**: ${columns.filter(c => c.type === 'categorical').length} dimensions available for deep slicing.
-
-*You can now ask for specific analytics, trends, or pinpoint factual lookups.*`;
+  const schemaResult = {
+    type: "schema",
+    columns: columnNames,
+    row_count: rowCount,
+    column_details: columnDetails,
+    date_range: dateRange,
+    sample_data: rows.slice(0, 5)
+  };
 
   return {
     charts: [],
     data: [],
-    insight: summary,
+    insight: JSON.stringify(schemaResult, null, 2),
     sql: "SELECT * FROM dataset LIMIT 0; -- Introspecting schema and data types",
     error: null,
     kpis,
@@ -767,6 +766,19 @@ Do not create graphs.`;
 
     if (charts.length === 0) return fallbackProcessQuery(query, dataset);
 
+    // SQL Sanitizer (Clean & Proper)
+    let finalSql = aiResult?.sql || "";
+    if (finalSql) {
+      finalSql = finalSql
+        .replace(/```sql|```/g, '') // Remove markdown
+        .replace(/dataset\./g, '')  // Remove unnecessary prefixes
+        .trim();
+        
+      if (!finalSql.toUpperCase().startsWith('SELECT') && !finalSql.toUpperCase().startsWith('DESCRIBE')) {
+         finalSql = `SELECT * FROM dataset -- Refined: ${finalSql}`;
+      }
+    }
+
     return {
       charts,
       data: allData,
@@ -775,7 +787,7 @@ Do not create graphs.`;
       kpis: generateKPIs(dataset, aiResult?.metrics?.[0]),
       suggestions: aiResult?.suggestions || [],
       filters: aiResult?.filters || [],
-      sql: aiResult?.sql || null,
+      sql: finalSql || null,
       rawAIPlan: aiResult,
     };
   } catch (err) {
@@ -957,13 +969,20 @@ function fallbackProcessQuery(query: string, dataset: ParsedDataset): QueryResul
       : 'Analysis complete.';
   }
 
+  const sql = `SELECT \n  ${dimension.name}, \n  ${aggregation.toUpperCase()}(${metric.name}) \nFROM dataset \nGROUP BY 1 \nORDER BY 2 DESC;`;
+
   return {
     charts: [chart],
     data: [chartData],
     insight,
+    sql,
     error: null,
     kpis: generateKPIs(dataset, metric.name),
-    filters
+    filters,
+    suggestions: [
+      `Show me another breakdown for ${metric.name}`,
+      `Compare ${metric.name} by a different dimension`,
+    ],
   };
 }
 
