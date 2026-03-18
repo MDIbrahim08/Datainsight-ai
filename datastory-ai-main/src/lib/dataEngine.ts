@@ -231,6 +231,10 @@ export function smartRetrieve(
 ): { docs: string[]; filters: Array<{column: string, value: string}> } | null {
   const q = query.toLowerCase();
   
+  // 1. Blacklist known non-dataset entities
+  const unknownEntities = ['mars', 'jupiter', 'saturn', 'venus', 'neptune', 'mercury', 'pluto', 'uranus', 'moon'];
+  if (unknownEntities.some(e => q.includes(e))) return null;
+
   const ANALYTICAL_TERMS = new Set([
     'total', 'revenue', 'sum', 'average', 'avg', 'count', 'max', 'min',
     'trend', 'growth', 'percentage', 'breakdown', 'distribution', 'top', 
@@ -248,14 +252,16 @@ export function smartRetrieve(
   const detectedFilters: Array<{column: string, value: string}> = [];
   const matchedRowIndices = new Set<number>();
 
-  // Map words to columns
   for (const word of words) {
+    // SPECIAL GUARD: Don't match years (like 2025) against order_ids or other numbers
+    const isYear = /^(201|202)[0-9]$/.test(word);
+    
     for (const col of columnNames) {
-      // Look for a row that has this word EXACTLY to be sure it's a data value
+      if (isYear && /id|uuid|ref|num/i.test(col)) continue;
+
       const match = rows.find(r => String(r[col] ?? '').toLowerCase() === word);
       if (match) {
         detectedFilters.push({ column: col, value: String(match[col]) });
-        // Collect some example rows for RAG context
         rows.forEach((r, idx) => {
           if (String(r[col] ?? '').toLowerCase() === word && matchedRowIndices.size < 20) {
             matchedRowIndices.add(idx);
