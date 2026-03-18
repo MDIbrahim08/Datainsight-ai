@@ -402,6 +402,7 @@ export function handleSchemaQuery(dataset: ParsedDataset, query: string): QueryR
     charts: [],
     data: [],
     insight: JSON.stringify(schemaResult, null, 2),
+    sql: "SELECT * FROM dataset LIMIT 0; -- Introspecting schema and data types",
     error: null,
     kpis,
     suggestions: [
@@ -443,7 +444,7 @@ STRICT JSON OUTPUT FORMAT (NO MARKDOWN, NO EXPLANATION):
       "reason": "Expert justification for choosing this chart type for the persona"
     }
   ],
-  "sql": "SELECT dimension, SUM(metric) FROM dataset WHERE condition GROUP BY dimension ORDER BY 2 DESC",
+  "sql": "SELECT ... FROM ... WHERE ...",
   "insight": "A crystal-clear, structured business insight focused on performance drivers or ROI.",
   "suggestions": [
     "One diagnostic question (WHY did something happen?)",
@@ -454,13 +455,10 @@ STRICT JSON OUTPUT FORMAT (NO MARKDOWN, NO EXPLANATION):
 }
 
 CORE ANALYSIS LOGIC:
-1. HALLUCINATION GUARD: If a query references data outside the defined columns, return {"error": "Reason the data is missing"}.
-2. AGENTIC DRILL-DOWN: If a filter is applied to the CURRENT x_axis, SWAP x_axis to a different dimension.
-3. SEMANTIC SYNONYMS: Be smart about synonyms (department = branch, worth = revenue, who = name).
-4. SQL GENERATION: Always synthesize a clean, valid PostgreSQL/BigQuery compatible SQL statement representing the query.
-5. PINPOINT isolation: If the user asks about an entity like 'Geetha', isolate her record ONLY.
-6. CHART STRATEGY: line=trends, bar=comparisons, pie=distribution, area=volume.
-7. METRIC INTEGRITY: NEVER sum 'order_id' or 'rating'. Use 'count' for IDs and 'avg' for ratings.`;
+1. PURE SQL ONLY: The 'sql' field must be a valid SQL string (e.g. SELECT category, SUM(revenue) FROM dataset). NEVER put JSON or code objects in the sql field.
+2. HALLUCINATION GUARD: If query references missing columns, return {"error": "Reason"}.
+3. SQL GENERATION: Always synthesize a clean, valid PostgreSQL/BigQuery compatible SQL statement representing the query.
+4. METRIC INTEGRITY: NEVER sum 'order_id' or 'rating'. Use 'count' for IDs and 'avg' for ratings.`;
 
 // ============================================================
 // SYSTEM PROMPT: for direct factual lookup queries (RAG mode)
@@ -468,18 +466,15 @@ CORE ANALYSIS LOGIC:
 const DIRECT_ANSWER_SYSTEM_PROMPT = `You are a data assistant that answers questions strictly based on the provided dataset.
 
 RULES (MANDATORY):
-1. Only use the retrieved rows given in the context.
-2. Do NOT guess or infer missing values.
-3. If the exact answer is not found in the retrieved rows, say: "Data not found in the dataset."
-4. Always match entities (like names) exactly. Do not approximate.
-5. When the question asks about a specific person, return ONLY that person's row values.
-6. Do NOT summarize the entire dataset unless explicitly asked.
-7. Do NOT generate graphs, charts, or visualizations unless explicitly requested.
-8. Always return answers in a clear structured format.
-
-FORMAT RULES:
-- For single record queries: Return as "ColumnName: Value" bullet points.
-- For unknown queries: Return exactly: "Data not found in the dataset."`;
+1. Only use the retrieved rows given in context.
+2. If match is not found, say "Data not found in dataset."
+3. SQL: Synthesize the SQL query that finds this data (e.g. SELECT * FROM dataset WHERE name = 'Sneha').
+4. FORMAT: Return JSON format ONLY:
+{
+  "answer": "The plain text answer with bullet points for values",
+  "sql": "SELECT ... FROM ... WHERE ...",
+  "filters": [{"column": "col", "value": "val"}]
+}`;
 
 // ============================================================
 // CORE AI ADAPTER: Centralized fetch for stability
@@ -626,25 +621,34 @@ Do not create graphs.`;
       const aiResponse = await callGemini([
         { role: 'system', content: DIRECT_ANSWER_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
-      ]);
+      ], 0.1);
       
-      const directAnswer = aiResponse.choices?.[0]?.message?.content?.trim() || 'Data not found in the dataset.';
+      const rawContent = aiResponse.choices?.[0]?.message?.content?.trim() || '{}';
+      let parsed = { answer: rawContent, sql: "SELECT * FROM dataset", filters: retrieved.filters };
+      
+      try {
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        }
+      } catch(e) { }
+
       const firstFilter = retrieved.filters[0];
 
       return {
         charts: [],
         data: [],
-        insight: directAnswer,
-        directAnswer,
+        insight: parsed.answer,
+        directAnswer: parsed.answer,
+        sql: parsed.sql,
         error: null,
         kpis: generateKPIs(dataset),
-        filters: retrieved.filters.map(f => ({ column: f.column, operator: 'eq', value: f.value })),
+        filters: (parsed.filters || retrieved.filters).map((f: any) => ({ column: f.column, operator: 'eq', value: f.value })),
         suggestions: [
           `Show all records where ${firstFilter.column} is ${firstFilter.value}`,
-          `What is the average performance across all ${firstFilter.column} values?`,
-          `Compare ${firstFilter.value} against others in the same ${firstFilter.column}`,
+          `Trend analysis for this ${firstFilter.column}`,
         ],
-        rawAIPlan: { mode: 'direct_answer', retrieved_docs: retrieved.docs.length, match: firstFilter },
+        rawAIPlan: { mode: 'direct_answer', sql: parsed.sql },
       };
     } catch (err) {
       console.error('[RAG] Direct answer failed, falling back:', err);
