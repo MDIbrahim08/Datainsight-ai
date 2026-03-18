@@ -78,13 +78,12 @@ const Navbar = ({
 
           {isResultsActive && onGenerateBriefing && (
              <Button
-                variant="ghost"
                 onClick={onGenerateBriefing}
-                className="gap-2 font-bold border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary group relative overflow-visible"
+                className="gap-2 font-bold relative overflow-visible"
               >
-                <div className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-primary text-[8px] text-white animate-bounce shadow-lg shadow-primary/20">NEW</div>
+                <div className="absolute -top-1.5 -right-1.5 px-2 py-0.5 rounded-full bg-red-500 text-[8px] text-white animate-pulse shadow-lg ring-2 ring-background">NEW</div>
                 <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Executive Briefing</span>
+                <span className="hidden sm:inline text-white">Executive Briefing</span>
               </Button>
           )}
           
