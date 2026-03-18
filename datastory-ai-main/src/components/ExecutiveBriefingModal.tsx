@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileText, Download, Printer, CheckCircle2, Loader2, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react';
+import { X, FileText, Download, Printer, CheckCircle2, Loader2, Sparkles, ShieldCheck, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from './ui/button';
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 
 interface ExecutiveBriefingModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ interface ExecutiveBriefingModalProps {
   content: string | null;
   isLoading: boolean;
   datasetName: string;
+  charts?: any[];
+  kpis?: any[];
 }
 
 const ExecutiveBriefingModal = ({ 
@@ -16,7 +19,9 @@ const ExecutiveBriefingModal = ({
   onClose, 
   content, 
   isLoading,
-  datasetName 
+  datasetName,
+  charts = [],
+  kpis = []
 }: ExecutiveBriefingModalProps) => {
   const [downloading, setDownloading] = useState<'txt' | 'doc' | 'pdf' | null>(null);
   const [success, setSuccess] = useState(false);
@@ -24,8 +29,6 @@ const ExecutiveBriefingModal = ({
   const handleExport = async (type: 'txt' | 'doc' | 'pdf') => {
     if (!content) return;
     setDownloading(type);
-    
-    // Simulate processing for animation feel
     await new Promise(r => setTimeout(r, 1200));
 
     try {
@@ -40,16 +43,18 @@ const ExecutiveBriefingModal = ({
         if (type === 'doc') {
           mimeType = 'application/msword';
           extension = 'doc';
-          // Wrap in basic HTML for Word styling
           finalContent = `
             <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
             <head><meta charset='utf-8'><title>Executive Briefing</title></head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-              <h1 style="color: #2563eb;">Executive Strategic Briefing</h1>
-              <p><b>Dataset:</b> ${datasetName}</p>
-              <p><b>Date:</b> ${new Date().toLocaleDateString()}</p>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; padding: 40px;">
+              <h1 style="color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">Executive Strategic Briefing</h1>
+              <p><b>Dataset:</b> ${datasetName} | <b>Date:</b> ${new Date().toLocaleDateString()}</p>
+              <div style="background: #f8fafc; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <p><b>KPI SCORECARD:</b></p>
+                ${kpis.map(k => `<p>${k.label}: ${k.value}</p>`).join('')}
+              </div>
               <hr/>
-              <div style="white-space: pre-wrap;">${content}</div>
+              <div style="white-space: pre-wrap; font-size: 14pt;">${content.replace(/\n\n/g, '<br/><br/>')}</div>
             </body>
             </html>
           `;
@@ -62,7 +67,6 @@ const ExecutiveBriefingModal = ({
         element.click();
         document.body.removeChild(element);
       }
-      
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
     } catch (err) {
@@ -70,6 +74,38 @@ const ExecutiveBriefingModal = ({
     } finally {
       setDownloading(null);
     }
+  };
+
+  const renderFailsafeChart = () => {
+    if (!charts || charts.length === 0 || !charts[0].data) return null;
+    const chart = charts[0];
+    const data = chart.data || [];
+    
+    return (
+      <div className="h-[250px] w-full bg-secondary/10 rounded-2xl border border-primary/10 p-4 mb-8 print:border-black print:h-[400px]">
+        <h4 className="text-xs font-bold text-primary uppercase mb-4 flex items-center gap-2">
+          <TrendingUp className="w-3 h-3" />
+          Primary Strategic Visualization: {chart.title}
+        </h4>
+        <ResponsiveContainer width="100%" height="100%">
+          {chart.type === 'line' ? (
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+              <XAxis dataKey="name" hide />
+              <YAxis hide />
+              <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={false} isAnimationActive={false} />
+            </LineChart>
+          ) : (
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+              <XAxis dataKey="name" hide />
+              <YAxis hide />
+              <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    );
   };
 
   return (
@@ -81,7 +117,7 @@ const ExecutiveBriefingModal = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm print:hidden"
+            className="absolute inset-0 bg-background/90 backdrop-blur-md print:hidden"
           />
           
           <motion.div
@@ -91,63 +127,95 @@ const ExecutiveBriefingModal = ({
             className="relative w-full max-w-4xl max-h-[90vh] glass-card rounded-3xl border border-primary/20 shadow-2xl overflow-hidden flex flex-col print:shadow-none print:border-none print:bg-white print:text-black print:max-h-full print:relative print:scale-100"
           >
             {/* Header */}
-            <div className="p-6 border-b border-border/40 flex items-center justify-between bg-primary/5 print:bg-transparent print:border-black">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center print:hidden">
-                  <FileText className="w-6 h-6 text-primary" />
+            <div className="p-8 border-b border-border/40 flex items-center justify-between bg-primary/5 print:bg-transparent print:border-black">
+              <div className="flex items-center gap-6">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner print:hidden">
+                  <TrendingUp className="w-8 h-8 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-foreground print:text-black print:text-2xl">Executive Strategic Briefing</h2>
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold flex items-center gap-2 print:text-black/60">
-                    <Sparkles className="w-3 h-3 text-primary/70 print:hidden" />
-                    AI-Synthesized for Board of Directors
-                  </p>
+                  <h2 className="text-2xl font-black tracking-tight text-foreground print:text-black print:text-4xl">Executive Strategic Briefing</h2>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold print:text-black/60">
+                      AI-Synthesized for Board of Directors
+                    </span>
+                    <div className="w-1 h-1 rounded-full bg-primary print:hidden" />
+                    <span className="text-[10px] text-primary/70 font-mono print:text-black/40">DS-REVISION: 1.0.4</span>
+                  </div>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-xl hover:bg-secondary/50 flex items-center justify-center transition-colors print:hidden"
+                className="w-12 h-12 rounded-2xl hover:bg-secondary/50 flex items-center justify-center transition-all hover:rotate-90 print:hidden"
               >
-                <X className="w-5 h-5 text-muted-foreground" />
+                <X className="w-6 h-6 text-muted-foreground" />
               </button>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-card/30 print:overflow-visible print:bg-transparent print:p-12">
+            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-card/10 print:overflow-visible print:bg-transparent print:p-16">
               {isLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center space-y-4">
+                <div className="py-24 flex flex-col items-center justify-center space-y-6">
                   <div className="relative">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
-                    <Sparkles className="w-5 h-5 text-primary absolute -top-1 -right-1 animate-pulse" />
+                    <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                    <Sparkles className="w-6 h-6 text-primary absolute -top-1 -right-1 animate-pulse" />
                   </div>
                   <div className="text-center">
-                    <p className="text-lg font-bold text-foreground">Synthesizing Briefing...</p>
-                    <p className="text-sm text-muted-foreground">Gemini 1.5 is analyzing dashboard aggregates & trends</p>
+                    <p className="text-xl font-black text-foreground">Synthesizing Briefing...</p>
+                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">Gemini 1.5 is analyzing dashboard aggregates and trends</p>
                   </div>
                 </div>
               ) : content ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="prose prose-invert max-w-none print:text-black print:prose-black"
+                  className="max-w-none print:text-black"
                 >
-                   <div className="flex items-center gap-2 mb-8 bg-success/10 border border-success/20 px-4 py-2 rounded-xl w-fit print:hidden">
-                    <ShieldCheck className="w-4 h-4 text-success" />
-                    <span className="text-[10px] font-bold text-success uppercase tracking-widest">Verified Tactical Intelligence</span>
+                   {/* Strategic Scorecard */}
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10 print:hidden">
+                     {kpis.slice(0, 4).map((kpi, i) => (
+                       <div key={i} className="p-4 rounded-2xl bg-secondary/5 border border-border/50 shadow-sm">
+                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
+                         <p className="text-lg font-black text-foreground mt-1">{kpi.value}</p>
+                       </div>
+                     ))}
+                   </div>
+
+                   {/* Strategic Visualization */}
+                   {renderFailsafeChart()}
+
+                   <div className="flex items-center gap-2 mb-10 bg-success/10 border border-success/20 px-4 py-3 rounded-2xl w-fit shadow-sm print:hidden">
+                    <ShieldCheck className="w-5 h-5 text-success" />
+                    <span className="text-[11px] font-black text-success uppercase tracking-widest">Verified Tactical Intelligence</span>
                   </div>
 
-                  <div className="space-y-6 text-foreground/90 font-medium leading-relaxed font-sans subpixel-antialiased print:text-black">
-                    {/* Render newlines properly */}
-                    {content.split('\n').map((line, i) => (
-                      <p key={i} className={line.startsWith('#') || line.toUpperCase() === line ? 'font-bold text-primary mt-6 mb-2 border-l-2 border-primary/30 pl-3 uppercase tracking-wide text-sm print:text-black print:border-black/20' : ''}>
-                        {line}
-                      </p>
-                    ))}
+                  <div className="space-y-10 text-lg text-foreground/90 font-medium leading-relaxed font-sans subpixel-antialiased print:text-black print:text-xl">
+                    {/* Render with much cleaner logic */}
+                    {content.split('#').map((section, idx) => {
+                      if (!section.trim()) return null;
+                      const lines = section.trim().split('\n');
+                      const title = lines[0];
+                      const body = lines.slice(1).join('\n');
+                      
+                      return (
+                        <div key={idx} className="group">
+                          <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                            <div className="w-8 h-[2px] bg-primary group-hover:w-12 transition-all print:bg-black" />
+                            {title}
+                          </h3>
+                          <div className="text-foreground/80 pl-11 whitespace-pre-line group-hover:text-foreground transition-colors print:text-black print:pl-0">
+                            {body}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-12 pt-8 border-t border-border/30 text-center print:border-black/20">
-                    <p className="text-[10px] text-muted-foreground font-mono uppercase print:text-black/40">
-                      Generated by DataInsight AI • {datasetName} • {new Date().toLocaleDateString()}
+                  <div className="mt-20 pt-10 border-t border-border/20 text-center flex items-center justify-between print:border-black/20 print:mt-12">
+                     <p className="text-[10px] text-muted-foreground font-mono uppercase print:text-black/40">
+                      Generated by DataInsight AI • {datasetName}
+                    </p>
+                     <p className="text-[10px] text-muted-foreground font-sans font-bold uppercase print:text-black/40">
+                      Confidential • Board Access Only
                     </p>
                   </div>
                 </motion.div>
@@ -160,46 +228,38 @@ const ExecutiveBriefingModal = ({
             </div>
 
             {/* Footer Actions */}
-            <div className="p-6 border-t border-border/40 bg-secondary/20 flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle2 className="w-4 h-4 text-success" />
-                Confidence Score: 98% (Grounded in Verified Data)
+            <div className="p-8 border-t border-border/40 bg-secondary/10 flex flex-col sm:flex-row items-center justify-between gap-6 print:hidden">
+              <div className="flex items-center gap-3 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <CheckCircle2 className="w-5 h-5 text-success" />
+                Confidence: Verified
               </div>
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                 <Button
                   variant="ghost"
                   onClick={() => handleExport('pdf')}
                   disabled={!!downloading || isLoading}
-                  className="flex-1 sm:flex-none gap-2"
+                  className="flex-1 sm:flex-none gap-2 rounded-xl h-12"
                 >
                   <Printer className="w-4 h-4" />
-                  PDF / Print
+                  PDF Report
                 </Button>
                 
                 <Button
                   onClick={() => handleExport('doc')}
                   disabled={!!downloading || isLoading}
-                  className="flex-1 sm:flex-none gap-2 glass-button hover:bg-primary/20"
+                  className="flex-1 sm:flex-none gap-2 glass-button hover:bg-primary/20 rounded-xl h-12 border border-primary/10 shadow-lg"
                 >
                   {downloading === 'doc' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  {success && downloading === 'doc' ? 'Saved!' : 'MS Word (.doc)'}
+                  {success && downloading === 'doc' ? 'Saved!' : 'Export Word'}
                 </Button>
 
                 <Button
                   onClick={() => handleExport('txt')}
                   disabled={!!downloading || isLoading}
-                  className="flex-1 sm:flex-none gap-2 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 relative group"
+                  className="flex-1 sm:flex-none gap-2 bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 rounded-xl h-12 px-6"
                 >
-                  {success && !downloading ? (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex items-center gap-2">
-                       <CheckCircle2 className="w-4 h-4" /> Done
-                    </motion.div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      {downloading === 'txt' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                      Save as TXT
-                    </div>
-                  )}
+                    <Download className="w-4 h-4" />
+                    Download Briefing
                 </Button>
               </div>
             </div>

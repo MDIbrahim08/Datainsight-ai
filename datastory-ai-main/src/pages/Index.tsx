@@ -582,6 +582,8 @@ const Index = () => {
         content={briefingText}
         isLoading={isGeneratingBriefing}
         datasetName={datasetName}
+        charts={result?.charts || []}
+        kpis={result?.kpis || []}
       />
 
       {/* Footer */}
