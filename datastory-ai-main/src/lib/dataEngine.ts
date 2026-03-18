@@ -718,43 +718,42 @@ export async function generateExecutiveBriefing(
     CHART INSIGHTS:
     ${chartInsights}
 
-    ALREADY GENERATED INSIGHT:
+    INSIGHT:
     ${result.insight}
 
     FORMAT REQUIREMENTS:
-    1. EXECUTIVE SUMMARY (2-3 sentences max) - High-level performance.
-    2. KEY PERFORMANCE INDICATORS (Bullet points with values)
-    3. STRATEGIC OBSERVATIONS (At least 2 critical drivers or trends discovered)
-    4. ACTIONABLE RECOMMENDATIONS (One clear next step for management)
+    1. EXECUTIVE SUMMARY (2-3 sentences max)
+    2. KEY PERFORMANCE INDICATORS
+    3. STRATEGIC OBSERVATIONS
+    4. ACTIONABLE RECOMMENDATIONS
 
-    TONE: Formal, Objective, Strategic. No emojis.
+    TONE: Formal, Objective, Strategic. No emojis. Stay within 300 words.
   `.trim();
 
   try {
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-1.5-flash',
-          messages: [
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.1,
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
         }),
       }
     );
 
-    if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Gemini Briefing Error:', errorText);
+      throw new Error(`API error: ${response.statusText}`);
+    }
+    
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || "Briefing generation failed.";
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to generate briefing text.";
   } catch (err) {
     console.error('Briefing failed:', err);
-    return "Error generating briefing. Please check your connection.";
+    return "The Briefing Engine is currently under maintenance or hitting a network limit. Please try again in 30 seconds.";
   }
 }
 
