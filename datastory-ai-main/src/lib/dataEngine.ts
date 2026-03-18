@@ -704,18 +704,15 @@ export async function generateExecutiveBriefing(
     : 'All Data';
 
   const prompt = `
-    Generate a formal Executive Briefing for a Board of Directors based on this data:
-    
-    Current Metrics: ${kpis}
-    Active Filters: ${filters}
-    AI Insight: ${result.insight}
+    Based on the following metrics, write a formal business briefing.
+    METRICS: ${kpis}
+    FILTERS: ${filters}
+    ANALYSIS: ${result.insight}
 
-    FORMAT:
-    # EXECUTIVE SUMMARY
-    # KPI PERFORMANCE
-    # STRATEGIC RECOMMENDATIONS
-
-    TONE: Professional, Concise, Board-ready.
+    STRUCTURE:
+    - EXECUTIVE SUMMARY
+    - KEY FINDINGS
+    - RECOMMENDATIONS
   `.trim();
 
   try {
@@ -729,24 +726,25 @@ export async function generateExecutiveBriefing(
         },
         body: JSON.stringify({
           model: 'gemini-1.5-flash',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1,
-          max_tokens: 500,
+          messages: [
+            { role: 'system', content: 'You are a professional business analyst. Use formal language. Format with # headers.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.0,
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API Error:', errorText);
-      throw new Error(`API error: ${response.statusText}`);
+      return `API Limit Reached: Please wait 5 seconds and click 'Generate Briefing' again. (${response.status})`;
     }
     
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || "Briefing generation failed.";
-  } catch (err) {
-    console.error('Full Briefing Error:', err);
-    return "The Briefing Engine is momentarily busy. Please click the button again in 5 seconds to retry.";
+    return data.choices?.[0]?.message?.content || "Briefing engine returned an empty response.";
+  } catch (err: any) {
+    console.error('Final Briefing Error:', err);
+    return `Connection issue: ${err.message || 'Please retry in a moment.'}`;
   }
 }
 
