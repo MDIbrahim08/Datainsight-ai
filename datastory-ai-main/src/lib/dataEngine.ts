@@ -219,55 +219,56 @@ const STOP_WORDS = new Set([
  * 3. If not found, try CASE-INSENSITIVE partial match
  * Returns ALL matching rows (e.g. all rows for "Sneha") or empty array.
  */
+/**
+ * Smart entity retrieval:
+ * Identifies actual data values in the query and maps them to their columns.
+ * Returns a list of specific filters to apply.
+ */
 export function smartRetrieve(
   query: string,
   rows: Record<string, any>[],
   columnNames: string[]
-): { docs: string[]; matchValue: string; column: string } | null {
+): { docs: string[]; filters: Array<{column: string, value: string}> } | null {
   const q = query.toLowerCase();
+  
+  const ANALYTICAL_TERMS = new Set([
+    'total', 'revenue', 'sum', 'average', 'avg', 'count', 'max', 'min',
+    'trend', 'growth', 'percentage', 'breakdown', 'distribution', 'top', 
+    'bottom', 'highest', 'lowest', 'half', 'quarter', 'year', 'month',
+    'show', 'display', 'what is', 'how many'
+  ]);
+
   const words = q
     .split(/[\s,?]+/)
     .map(w => w.replace(/[^a-z0-9]/g, ''))
-    .filter(w => w.length > 1 && !STOP_WORDS.has(w));
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w) && !ANALYTICAL_TERMS.has(w));
 
   if (words.length === 0) return null;
 
-  // Pass 1: exact cell match
+  const detectedFilters: Array<{column: string, value: string}> = [];
+  const matchedRowIndices = new Set<number>();
+
+  // Map words to columns
   for (const word of words) {
-    const matchedRows: Array<{ idx: number; row: Record<string, any>; col: string }> = [];
-    for (let idx = 0; idx < rows.length; idx++) {
-      const row = rows[idx];
-      for (const col of columnNames) {
-        const cell = String(row[col] ?? '').toLowerCase().trim();
-        if (cell === word) {
-          matchedRows.push({ idx, row, col });
-        }
+    for (const col of columnNames) {
+      // Look for a row that has this word EXACTLY to be sure it's a data value
+      const match = rows.find(r => String(r[col] ?? '').toLowerCase() === word);
+      if (match) {
+        detectedFilters.push({ column: col, value: String(match[col]) });
+        // Collect some example rows for RAG context
+        rows.forEach((r, idx) => {
+          if (String(r[col] ?? '').toLowerCase() === word && matchedRowIndices.size < 20) {
+            matchedRowIndices.add(idx);
+          }
+        });
+        break; 
       }
-    }
-    if (matchedRows.length > 0) {
-      const docs = matchedRows.map(m => rowToDoc(m.idx, m.row));
-      return { docs, matchValue: String(matchedRows[0].row[matchedRows[0].col]), column: matchedRows[0].col };
     }
   }
 
-  // Pass 2: case-insensitive partial match (e.g. "sneha" matches "Sneha Sharma")
-  for (const word of words) {
-    if (word.length < 3) continue;
-    const matchedRows: Array<{ idx: number; row: Record<string, any>; col: string }> = [];
-    for (let idx = 0; idx < rows.length; idx++) {
-      const row = rows[idx];
-      for (const col of columnNames) {
-        const cell = String(row[col] ?? '').toLowerCase().trim();
-        if (typeof row[col] === 'string' && cell.includes(word)) {
-          matchedRows.push({ idx, row, col });
-        }
-      }
-    }
-    if (matchedRows.length > 0 && matchedRows.length < rows.length * 0.3) {
-      // Only use partial if it's a selective match (< 30% of rows)
-      const docs = matchedRows.map(m => rowToDoc(m.idx, m.row));
-      return { docs, matchValue: String(matchedRows[0].row[matchedRows[0].col]), column: matchedRows[0].col };
-    }
+  if (detectedFilters.length > 0) {
+    const docs = Array.from(matchedRowIndices).map(idx => rowToDoc(idx, rows[idx]));
+    return { docs, filters: detectedFilters };
   }
 
   return null;
@@ -275,27 +276,28 @@ export function smartRetrieve(
 
 /**
  * Detect if a query is a direct factual lookup (who/what/which about a specific entity).
- * These queries should return a plain-text answer, not a chart.
  */
 export function isDirectAnswerQuery(query: string): boolean {
   const q = query.toLowerCase().trim();
+  // If it mentions "total" or "sum" or "trend", it's NOT a direct answer query, it's analytical.
+  if (/\b(total|sum|average|avg|trend|growth|monthly|breakdown)\b/i.test(q)) return false;
+
   return (
     /^(who|what|which|where)\s+is\b/i.test(q) ||
     /^(who|what|which|where)\s+does\b/i.test(q) ||
-    /\b(branch|department|section|roll|score|marks|salary|age|email|phone|city|grade)\s+(of|for|is|does)\b/i.test(q) ||
-    /\bwhich\b.*\b(branch|department|section|class|group|team)\b/i.test(q) ||
-    /(the\s+)?(branch|department|score|marks|salary|rating|grade|section)\s+(of|for)/i.test(q)
+    /\b(branch|department|section|roll|score|marks|rank|rating|price|id)\s+(of|for|is|does)\b/i.test(q)
   );
 }
 
-// Legacy compatibility shim — thin wrapper around smartRetrieve that returns a single-row result
+// Legacy compatibility shim
 function findSpecificMatch(query: string, rows: Record<string, any>[], columnNames: string[]): { row: Record<string, any>, matchValue: string, column: string } | null {
   const result = smartRetrieve(query, rows, columnNames);
-  if (!result || result.docs.length === 0) return null;
+  if (!result || result.filters.length === 0) return null;
+  const firstFilter = result.filters[0];
   // Parse first doc back to row (quick re-lookup)
   const firstLine = result.docs[0].split('\n')[0];
   const rowId = parseInt(firstLine.replace('ROW_ID: ', ''), 10);
-  return { row: rows[rowId] ?? rows[0], matchValue: result.matchValue, column: result.column };
+  return { row: rows[rowId] ?? rows[0], matchValue: firstFilter.value, column: firstFilter.column };
 }
 
 // Detect if a query is asking for dataset schema/metadata
@@ -494,6 +496,7 @@ Do not summarize the dataset.
 Do not create graphs.`;
 
     try {
+      // ... same API call ... (omitting for brevity in chunk but ensuring consistency)
       const response = await fetch(
         'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         {
@@ -517,6 +520,7 @@ Do not create graphs.`;
 
       const aiResponse = await response.json();
       const directAnswer = aiResponse.choices?.[0]?.message?.content?.trim() || 'Data not found in the dataset.';
+      const firstFilter = retrieved.filters[0];
 
       return {
         charts: [],
@@ -525,13 +529,13 @@ Do not create graphs.`;
         directAnswer,
         error: null,
         kpis: generateKPIs(dataset),
-        filters: [{ column: retrieved.column, operator: 'eq', value: retrieved.matchValue }],
+        filters: retrieved.filters.map(f => ({ column: f.column, operator: 'eq', value: f.value })),
         suggestions: [
-          `Show all records where ${retrieved.column} is ${retrieved.matchValue}`,
-          `What is the average performance across all ${retrieved.column} values?`,
-          `Compare ${retrieved.matchValue} against others in the same ${retrieved.column}`,
+          `Show all records where ${firstFilter.column} is ${firstFilter.value}`,
+          `What is the average performance across all ${firstFilter.column} values?`,
+          `Compare ${firstFilter.value} against others in the same ${firstFilter.column}`,
         ],
-        rawAIPlan: { mode: 'direct_answer', retrieved_docs: retrieved.docs.length, match: { column: retrieved.column, value: retrieved.matchValue } },
+        rawAIPlan: { mode: 'direct_answer', retrieved_docs: retrieved.docs.length, match: firstFilter },
       };
     } catch (err) {
       console.error('[RAG] Direct answer failed, falling back:', err);
@@ -542,31 +546,26 @@ Do not create graphs.`;
   // ──────────────────────────────────────────────────────────
   // STEP 3: Chart / Analytics mode
   // ──────────────────────────────────────────────────────────
-  // Legacy pointMatch for filter injection (uses the existing retrieved result)
-  const pointMatch = retrieved
-    ? (() => {
-        const firstDocLines = retrieved.docs[0]?.split('\n') || [];
-        const rowIdLine = firstDocLines.find(l => l.startsWith('ROW_ID: '));
-        const rowId = rowIdLine ? parseInt(rowIdLine.replace('ROW_ID: ', ''), 10) : 0;
-        return { row: rows[rowId] ?? rows[0], matchValue: retrieved.matchValue, column: retrieved.column };
-      })()
-    : null;
-
   let enhancedQuery = query;
+  const isDirect = isDirectAnswerQuery(query);
+  
+  let entityFilters: any[] = [];
+  if (retrieved) {
+    entityFilters = retrieved.filters.map(f => ({ column: f.column, operator: 'eq', value: f.value }));
+    
+    if (isDirect) {
+      enhancedQuery = `
+        RETRIEVED DATA FOR ENTITY: ${retrieved.docs[0]}
+        USER QUESTION: "${query}"
+        
+        INSTRUCTION: This is a direct lookup. 
+        1. Answer based ONLY on the retrieved data.
+        2. Set 'filters' to isolate this entity: ${JSON.stringify(entityFilters)}
+      `.trim();
+    }
+  }
 
-  if (pointMatch) {
-    enhancedQuery = `
-      PINPOINT DATA FOUND: ${JSON.stringify(pointMatch.row)}
-      USER QUESTION: "${query}"
-      ENTITY NAME: "${pointMatch.matchValue}"
-      COLUMN: "${pointMatch.column}"
-      
-      INSTRUCTION: This is a DIRECT question about '${pointMatch.matchValue}'. 
-      1. Provide a direct, one-sentence answer in 'insight' (e.g. "${pointMatch.matchValue} is in the [Branch] branch with [Marks] marks").
-      2. Set 'filters' to: [{"column": "${pointMatch.column}", "operator": "eq", "value": "${pointMatch.matchValue}"}]
-      3. CRITICAL: Do NOT mention other records or provide general breakdowns. Isolate this entity.
-    `.trim();
-  } else if (previousState && isFollowUp(query)) {
+  if (!isDirect && previousState && isFollowUp(query)) {
     const prevCharts = previousState.result.charts.map(c => c.title).join(', ');
     enhancedQuery = `
       CONTEXT: This is a follow-up refinement query.
@@ -575,9 +574,7 @@ Do not create graphs.`;
       CURRENT ACTIVE FILTERS: ${JSON.stringify(previousState.filters)}
       NEW INSTRUCTION: "${query}"
       
-      GOAL: Update the analysis. 
-      IMPORTANT DRILL-DOWN RULE: If filtering for a specific value in the CURRENT x_axis (e.g. category: Fashion), SWAP the x_axis to a different dimension (Region, Date, etc.) to show a breakdown of that subset.
-      Always preserve relevant filters from the CURRENT ACTIVE FILTERS unless the user explicitly asks to remove them.
+      GOAL: Update the analysis. Preserve filters unless asked otherwise.
     `.trim();
   }
 
@@ -610,9 +607,17 @@ Do not create graphs.`;
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(content);
 
-    // FORCE ENFORCE FILTERS for PINPOINT Accuracy
-    if (pointMatch && (!aiResult.filters || aiResult.filters.length === 0)) {
-      aiResult.filters = [{ column: pointMatch.column, operator: 'eq', value: pointMatch.matchValue }];
+    // Merge detected entity filters with AI filters
+    if (entityFilters.length > 0) {
+      aiResult.filters = [...(aiResult.filters || []), ...entityFilters];
+      // De-duplicate filters
+      const seen = new Set();
+      aiResult.filters = aiResult.filters.filter((f: any) => {
+        const key = `${f.column}-${f.value}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
 
     if (aiResult?.error) {
