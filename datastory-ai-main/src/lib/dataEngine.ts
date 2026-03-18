@@ -448,6 +448,38 @@ FORMAT RULES:
 - For unknown queries: Return exactly: "Data not found in the dataset."`;
 
 // ============================================================
+// CORE AI ADAPTER: Centralized fetch for stability
+// ============================================================
+async function callGemini(messages: any[], temperature: number = 0.0) {
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) throw new Error("VITE_GEMINI_API_KEY not found.");
+
+  const response = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GEMINI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gemini-1.5-flash',
+        messages,
+        temperature,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error('Gemini Fetch Error:', err);
+    throw new Error(`AI Service Error (${response.status})`);
+  }
+
+  return await response.json();
+}
+
+// ============================================================
 // Process query using AI (Client-side Gemini Integration)
 // ============================================================
 export async function processQueryWithAI(
@@ -496,29 +528,11 @@ Do not summarize the dataset.
 Do not create graphs.`;
 
     try {
-      // ... same API call ... (omitting for brevity in chunk but ensuring consistency)
-      const response = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${GEMINI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gemini-1.5-flash',
-            messages: [
-              { role: 'system', content: DIRECT_ANSWER_SYSTEM_PROMPT },
-              { role: 'user', content: userPrompt },
-            ],
-            temperature: 0.0,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
-
-      const aiResponse = await response.json();
+      const aiResponse = await callGemini([
+        { role: 'system', content: DIRECT_ANSWER_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ]);
+      
       const directAnswer = aiResponse.choices?.[0]?.message?.content?.trim() || 'Data not found in the dataset.';
       const firstFilter = retrieved.filters[0];
 
@@ -579,28 +593,10 @@ Do not create graphs.`;
   }
 
   try {
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gemini-1.5-flash',
-          messages: [
-            { role: 'system', content: CHART_SYSTEM_PROMPT(columnInfo, dataPreview) },
-            { role: 'user', content: enhancedQuery },
-          ],
-          temperature: 0.1,
-        }),
-      }
-    );
-
-    if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
-
-    const aiResponse = await response.json();
+    const aiResponse = await callGemini([
+      { role: 'system', content: CHART_SYSTEM_PROMPT(columnInfo, dataPreview) },
+      { role: 'user', content: enhancedQuery },
+    ], 0.1);
     let content = aiResponse.choices?.[0]?.message?.content || '';
 
     // Clean JSON content
@@ -695,9 +691,6 @@ export async function generateExecutiveBriefing(
   result: QueryResult,
   activeFilters: any[]
 ): Promise<string> {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!GEMINI_API_KEY) return "VITE_GEMINI_API_KEY not found.";
-
   const kpis = result.kpis.map(k => `${k.label}: ${k.value}`).join(' | ');
   const filters = activeFilters.length > 0 
     ? activeFilters.map(f => `${f.column}=${f.value}`).join(', ') 
@@ -710,41 +703,21 @@ export async function generateExecutiveBriefing(
     ANALYSIS: ${result.insight}
 
     STRUCTURE:
-    - EXECUTIVE SUMMARY
-    - KEY FINDINGS
-    - RECOMMENDATIONS
+    # EXECUTIVE SUMMARY
+    # KEY FINDINGS
+    # RECOMMENDATIONS
   `.trim();
 
   try {
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${GEMINI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gemini-1.5-flash',
-          messages: [
-            { role: 'system', content: 'You are a professional business analyst. Use formal language. Format with # headers.' },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.0,
-        }),
-      }
-    );
+    const aiResponse = await callGemini([
+      { role: 'system', content: 'You are a professional business analyst. Use formal language. Format with # headers.' },
+      { role: 'user', content: prompt }
+    ], 0.1);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return `API Limit Reached: Please wait 5 seconds and click 'Generate Briefing' again. (${response.status})`;
-    }
-    
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || "Briefing engine returned an empty response.";
+    return aiResponse.choices?.[0]?.message?.content || "Briefing engine returned an empty response.";
   } catch (err: any) {
-    console.error('Final Briefing Error:', err);
-    return `Connection issue: ${err.message || 'Please retry in a moment.'}`;
+    console.error('Briefing Engine Error:', err);
+    return `Briefing Service: ${err.message}. Please wait 5 seconds and click again.`;
   }
 }
 
