@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Sparkles, Filter, Cpu, ChevronDown, Shield, X, Target, Rows } from 'lucide-react';
+import { AlertCircle, Sparkles, Filter, Cpu, ChevronDown, Shield, X, Target, Rows, Code2 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import HeroQuery from '@/components/HeroQuery';
 import KPICards from '@/components/KPICards';
@@ -433,6 +433,19 @@ const Index = () => {
                         </p>
                       </div>
 
+                      {/* NEW: SQL for Direct Answer */}
+                      {result.sql && (
+                        <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                           <div className="flex items-center gap-2 mb-2">
+                              <Code2 className="w-3.5 h-3.5 text-primary" />
+                              <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">Compiled Logic</span>
+                           </div>
+                           <pre className="text-[11px] font-mono text-primary/80 whitespace-pre-wrap">
+                             {result.sql}
+                           </pre>
+                        </div>
+                      )}
+
                       {/* Suggestions */}
                       {result.suggestions && result.suggestions.length > 0 && (
                         <div>
@@ -476,6 +489,32 @@ const Index = () => {
                       />
                     ))}
                   </div>
+ 
+                  {/* NEW: Synthetic SQL Blueprint Area */}
+                  {result.sql && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-8 mb-4 border border-primary/20 bg-primary/5 rounded-2xl overflow-hidden shadow-sm"
+                    >
+                      <div className="px-5 py-3 border-b border-primary/10 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                           <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+                              <Code2 className="w-4 h-4 text-primary" />
+                           </div>
+                           <p className="text-xs font-bold text-foreground tracking-tight uppercase">Synthetic SQL Blueprint</p>
+                        </div>
+                        <div className="px-2.5 py-0.5 rounded-full bg-primary/20 text-[9px] font-bold text-primary uppercase tracking-[0.1em] border border-primary/30">
+                          AI Compiled
+                        </div>
+                      </div>
+                      <div className="p-5 bg-card/60 backdrop-blur-sm">
+                        <pre className="text-xs font-mono text-primary/90 leading-relaxed overflow-x-auto whitespace-pre-wrap select-all">
+                          {result.sql}
+                        </pre>
+                      </div>
+                    </motion.div>
+                  )}
 
                   {/* Technical Intelligence Log for Evaluators */}
                   <div className="mt-12 pt-12 border-t border-border/30">

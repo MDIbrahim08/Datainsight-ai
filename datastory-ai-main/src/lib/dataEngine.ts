@@ -36,6 +36,7 @@ export interface QueryResult {
   rawAIPlan?: any;
   /** If set, this is a direct factual answer — show as answer card, skip charts */
   directAnswer?: string;
+  sql?: string;
 }
 
 export interface KPI {
@@ -53,8 +54,46 @@ export interface QueryState {
   filters: Record<string, any>;
 }
 
-// CSV Parser with encoding fallback and delimiter detection
+// Parsing Engine supporting CSV and JSON
 export function parseCSV(text: string): ParsedDataset {
+  const trimmed = text.trim();
+
+  // ──────────────────────────────────────────────────────────
+  // JSON DETECTOR
+  // ──────────────────────────────────────────────────────────
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const data = JSON.parse(trimmed);
+      const rows = Array.isArray(data) ? data : [data];
+      const headers = Object.keys(rows[0]);
+      
+      const columns: DataColumn[] = headers.map(name => {
+        const samples = rows.slice(0, 5).map(r => String(r[name] ?? ''));
+        const isNumeric = samples.every(s => !isNaN(Number(s)) && s !== '');
+        const isDate = samples.every(s => isDateLike(s));
+        
+        let type: DataColumn['type'] = 'categorical';
+        if (isDate) type = 'date';
+        else if (isNumeric && !/id$|_id$|^id_|uuid|ref/i.test(name)) type = 'numeric';
+        
+        return { name, type, sample: samples.slice(0, 3) };
+      });
+
+      return {
+        columns,
+        columnNames: headers,
+        originalHeaders: headers,
+        rows,
+        rowCount: rows.length
+      };
+    } catch (e) {
+      console.warn("JSON parse failed, trying CSV...");
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // CSV DETECTOR
+  // ──────────────────────────────────────────────────────────
   const firstLine = text.split('\n')[0];
   let delimiter = ',';
   if ((firstLine.match(/\t/g) || []).length > (firstLine.match(/,/g) || []).length) {
@@ -88,33 +127,20 @@ export function parseCSV(text: string): ParsedDataset {
 
   const columns: DataColumn[] = headers.map(name => {
     const samples = rows.slice(0, 10).map(r => String(r[name] ?? ''));
-    
     const numericCount = samples.filter(s => {
-      const c = s.replace(/[,$%]/g, '');
+      const c = String(s).replace(/[,$%]/g, '');
       return !isNaN(Number(c)) && c !== '';
     }).length;
-    
     const dateCount = samples.filter(s => isDateLike(s)).length;
 
     let type: DataColumn['type'] = 'categorical';
-
-    if (dateCount > samples.length * 0.5) {
-      type = 'date';
-    } else if (numericCount > samples.length * 0.5) {
-      const isIdCol = /id$|^id_|_id$|uuid|guid|reference/i.test(name);
-      type = isIdCol ? 'categorical' : 'numeric';
-    }
+    if (dateCount > samples.length * 0.5) type = 'date';
+    else if (numericCount > samples.length * 0.5 && !/id$|_id$|^id_|uuid|ref/i.test(name)) type = 'numeric';
 
     return { name, type, sample: samples.slice(0, 3) };
   });
 
-  return { 
-    columns, 
-    columnNames: headers, 
-    originalHeaders: rawHeaders, 
-    rows, 
-    rowCount: rows.length
-  };
+  return { columns, columnNames: headers, originalHeaders: rawHeaders, rows, rowCount: rows.length };
 }
 
 function parseLine(line: string, delimiter: string): string[] {
@@ -417,6 +443,7 @@ STRICT JSON OUTPUT FORMAT (NO MARKDOWN, NO EXPLANATION):
       "reason": "Expert justification for choosing this chart type for the persona"
     }
   ],
+  "sql": "SELECT dimension, SUM(metric) FROM dataset WHERE condition GROUP BY dimension ORDER BY 2 DESC",
   "insight": "A crystal-clear, structured business insight focused on performance drivers or ROI.",
   "suggestions": [
     "One diagnostic question (WHY did something happen?)",
@@ -430,9 +457,10 @@ CORE ANALYSIS LOGIC:
 1. HALLUCINATION GUARD: If a query references data outside the defined columns, return {"error": "Reason the data is missing"}.
 2. AGENTIC DRILL-DOWN: If a filter is applied to the CURRENT x_axis, SWAP x_axis to a different dimension.
 3. SEMANTIC SYNONYMS: Be smart about synonyms (department = branch, worth = revenue, who = name).
-4. PINPOINT isolation: If the user asks about an entity like 'Geetha', isolate her record ONLY.
-5. CHART STRATEGY: line=trends, bar=comparisons, pie=distribution, area=volume.
-6. METRIC INTEGRITY: NEVER sum 'order_id' or 'rating'. Use 'count' for IDs and 'avg' for ratings.`;
+4. SQL GENERATION: Always synthesize a clean, valid PostgreSQL/BigQuery compatible SQL statement representing the query.
+5. PINPOINT isolation: If the user asks about an entity like 'Geetha', isolate her record ONLY.
+6. CHART STRATEGY: line=trends, bar=comparisons, pie=distribution, area=volume.
+7. METRIC INTEGRITY: NEVER sum 'order_id' or 'rating'. Use 'count' for IDs and 'avg' for ratings.`;
 
 // ============================================================
 // SYSTEM PROMPT: for direct factual lookup queries (RAG mode)
@@ -742,6 +770,7 @@ Do not create graphs.`;
       kpis: generateKPIs(dataset, aiResult?.metrics?.[0]),
       suggestions: aiResult?.suggestions || [],
       filters: aiResult?.filters || [],
+      sql: aiResult?.sql || null,
       rawAIPlan: aiResult,
     };
   } catch (err) {

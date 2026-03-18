@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, ArrowRight, Zap, Brain, BarChart3, Upload } from 'lucide-react';
+import { Mic, Search, Sparkles, ArrowRight, Zap, Brain, BarChart3, Upload, Loader2, Volume2 } from 'lucide-react';
 import VaporizeTextCycle, { Tag } from './ui/VaporizeTextCycle';
 import { Button } from './ui/button';
 
@@ -27,7 +27,36 @@ const FEATURES = [
 const HeroQuery = ({ onQuery, isLoading, datasetActive }: HeroQueryProps) => {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice recognition is not supported in your browser. Please try Chrome or Edge.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuery(transcript);
+      onQuery(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +156,17 @@ const HeroQuery = ({ onQuery, isLoading, datasetActive }: HeroQueryProps) => {
                   placeholder="Ask your data anything (e.g. 'show schema')..."
                   className="w-full bg-transparent border-none py-5 px-4 text-foreground placeholder:text-muted-foreground/60 focus:ring-0 text-lg outline-none"
                 />
-                <div className="pr-3">
+                <div className="flex items-center gap-2 pr-3">
+                  <Button
+                    type="button"
+                    onClick={startListening}
+                    variant="ghost"
+                    size="sm"
+                    className={`rounded-full w-10 h-10 p-0 flex items-center justify-center transition-all ${isListening ? 'bg-red-500/10 text-red-500 animate-pulse ring-2 ring-red-500/20' : 'text-primary hover:bg-primary/10'}`}
+                  >
+                    {isListening ? <Volume2 className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </Button>
+
                   <Button
                     type="submit"
                     variant="solid"

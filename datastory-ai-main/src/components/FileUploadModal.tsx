@@ -14,15 +14,30 @@ const FileUploadModal = ({ open, onClose, onFileLoaded, error }: FileUploadModal
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
+    const reader = new FileReader();
+    const isJson = file.name.toLowerCase().endsWith('.json');
+    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+
+    if (!isJson && !isExcel && !isCsv) {
+      alert("Please upload a CSV, JSON, or Excel file.");
       return;
     }
-    const reader = new FileReader();
+
     reader.onload = (e) => {
-      const text = e.target?.result as string;
-      onFileLoaded(text, file.name);
+      let content = e.target?.result as string;
+      
+      // If JSON, we might want to pre-process it or just pass it as string
+      // Our dataEngine.parseCSV will be updated to handle JSON detection
+      onFileLoaded(content, file.name);
     };
-    reader.readAsText(file);
+
+    if (isExcel) {
+       // For Excel we need to read as array buffer (will add library later)
+       reader.readAsArrayBuffer(file);
+    } else {
+       reader.readAsText(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -54,10 +69,9 @@ const FileUploadModal = ({ open, onClose, onFileLoaded, error }: FileUploadModal
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-semibold text-foreground">Upload Dataset</h2>
                 <Button 
-                  onClick={onClose} 
+                   onClick={onClose} 
                   variant="ghost" 
                   size="sm" 
-                  neon={false} 
                   className="rounded-lg text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-5 h-5" />
@@ -73,14 +87,14 @@ const FileUploadModal = ({ open, onClose, onFileLoaded, error }: FileUploadModal
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/20 transition-colors">
                   <FileSpreadsheet className="w-6 h-6 text-primary" />
                 </div>
-                <p className="text-sm font-medium text-foreground mb-1">Drop your CSV file here</p>
-                <p className="text-xs text-muted-foreground">or click to browse</p>
+                <p className="text-sm font-medium text-foreground mb-1">Drop your file here</p>
+                <p className="text-xs text-muted-foreground">CSV, Excel (.xlsx), or JSON</p>
               </div>
 
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.json,.xlsx,.xls"
                 onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
                 className="hidden"
               />
