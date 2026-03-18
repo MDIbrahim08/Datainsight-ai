@@ -698,62 +698,55 @@ export async function generateExecutiveBriefing(
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   if (!GEMINI_API_KEY) return "VITE_GEMINI_API_KEY not found.";
 
-  const kpis = result.kpis.map(k => `${k.label}: ${k.value} (${k.change || 'Stable'})`).join('\n');
+  const kpis = result.kpis.map(k => `${k.label}: ${k.value}`).join(' | ');
   const filters = activeFilters.length > 0 
-    ? activeFilters.map(f => `${f.column} = ${f.value}`).join(', ') 
-    : 'None (Full Dataset)';
-  
-  const chartInsights = result.charts.map(c => `- ${c.title}: ${c.reason}`).join('\n');
+    ? activeFilters.map(f => `${f.column}=${f.value}`).join(', ') 
+    : 'All Data';
 
   const prompt = `
-    You are a Senior Strategic Consultant reporting to a Board of Directors.
-    Based on the following DataInsight AI dashboard state, generate a PRECISE, PROFESSIONAL EXECUTIVE BRIEFING.
+    Generate a formal Executive Briefing for a Board of Directors based on this data:
+    
+    Current Metrics: ${kpis}
+    Active Filters: ${filters}
+    AI Insight: ${result.insight}
 
-    DASHBOARD METRICS:
-    ${kpis}
+    FORMAT:
+    # EXECUTIVE SUMMARY
+    # KPI PERFORMANCE
+    # STRATEGIC RECOMMENDATIONS
 
-    ACTIVE FILTERS:
-    ${filters}
-
-    CHART INSIGHTS:
-    ${chartInsights}
-
-    INSIGHT:
-    ${result.insight}
-
-    FORMAT REQUIREMENTS:
-    1. EXECUTIVE SUMMARY (2-3 sentences max)
-    2. KEY PERFORMANCE INDICATORS
-    3. STRATEGIC OBSERVATIONS
-    4. ACTIONABLE RECOMMENDATIONS
-
-    TONE: Formal, Objective, Strategic. No emojis. Stay within 300 words.
+    TONE: Professional, Concise, Board-ready.
   `.trim();
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
+          model: 'gemini-1.5-flash',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 500,
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini Briefing Error:', errorText);
+      console.error('Gemini API Error:', errorText);
       throw new Error(`API error: ${response.statusText}`);
     }
     
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to generate briefing text.";
+    return data.choices?.[0]?.message?.content || "Briefing generation failed.";
   } catch (err) {
-    console.error('Briefing failed:', err);
-    return "The Briefing Engine is currently under maintenance or hitting a network limit. Please try again in 30 seconds.";
+    console.error('Full Briefing Error:', err);
+    return "The Briefing Engine is momentarily busy. Please click the button again in 5 seconds to retry.";
   }
 }
 
