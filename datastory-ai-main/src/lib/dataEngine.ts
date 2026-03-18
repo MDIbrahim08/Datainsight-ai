@@ -561,6 +561,21 @@ export async function processQueryWithAI(
   const retrieved = smartRetrieve(query, rows, columnNames);
 
   // ──────────────────────────────────────────────────────────
+  // ZERO-TOLERANCE HALLUCINATION GUARD (Final Polish)
+  // ──────────────────────────────────────────────────────────
+  const isPinpointRequest = /^(who|is|for|where|find|get|tell me about)\s/i.test(qLower) || qLower.includes('\'') || qLower.includes('"');
+  if (isPinpointRequest && !retrieved) {
+    return {
+      charts: [],
+      data: [],
+      insight: `The Hallucination Guard has identified that the requested entity ("${query}") is not present in the verified dataset.`,
+      error: `Data Not Found: The specified parameter exists outside the current data universe.`,
+      kpis: generateKPIs(dataset),
+      filters: []
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────
   // STEP 2: Route to DIRECT ANSWER mode if factual lookup
   // ──────────────────────────────────────────────────────────
   if (retrieved && isDirectAnswerQuery(query)) {
