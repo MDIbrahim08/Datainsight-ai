@@ -540,6 +540,22 @@ export async function processQueryWithAI(
   const dataPreview = rows.slice(0, 5);
 
   // ──────────────────────────────────────────────────────────
+  // PRE-FLIGHT HALLUCINATION GUARD (Hard-Wired Security)
+  // ──────────────────────────────────────────────────────────
+  const qLower = query.toLowerCase();
+  const blacklisted = ['mars', 'jupiter', 'saturn', 'venus', 'neptune', 'mercury', 'pluto', 'uranus', 'moon', 'alien', 'ufo'];
+  if (blacklisted.some(entity => qLower.includes(entity))) {
+    return {
+      charts: [],
+      data: [],
+      insight: `The Hallucination Guard has blocked this request. The entity "${query.split(' ').pop() || 'requested data'}" does not exist in your dataset.`,
+      error: `Security Alert: Unrecognized entity detected. Access blocked to preserve data integrity.`,
+      kpis: generateKPIs(dataset),
+      filters: []
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────
   // STEP 1: Smart Retrieval — find rows matching query entities
   // ──────────────────────────────────────────────────────────
   const retrieved = smartRetrieve(query, rows, columnNames);
