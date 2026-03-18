@@ -389,19 +389,20 @@ export function handleSchemaQuery(dataset: ParsedDataset, query: string): QueryR
     { label: 'Date Fields', value: String(columns.filter(c => c.type === 'date').length), trend: 'neutral' },
   ];
 
-  const schemaResult = {
-    type: "schema",
-    columns: columnNames,
-    row_count: rowCount,
-    column_details: columnDetails,
-    date_range: dateRange,
-    sample_data: rows.slice(0, 5)
-  };
+  const summary = `### 📋 DATASET BLUEPRINT: ${columnNames.length} DIMENSIONS DISCOVERED
+I have successfully mapped **${rowCount.toLocaleString()} records** across **${columnNames.length} critical variables**.
+
+**Architecture Summary:**
+- **Numerical Performance**: ${columns.filter(c => c.type === 'numeric').length} metrics are ready for aggregation.
+- **Time Intelligence**: ${columns.filter(c => c.type === 'date').length} date-points detected for trend analysis.
+- **Categorical Grain**: ${columns.filter(c => c.type === 'categorical').length} dimensions available for deep slicing.
+
+*You can now ask for specific analytics, trends, or pinpoint factual lookups.*`;
 
   return {
     charts: [],
     data: [],
-    insight: JSON.stringify(schemaResult, null, 2),
+    insight: summary,
     sql: "SELECT * FROM dataset LIMIT 0; -- Introspecting schema and data types",
     error: null,
     kpis,
