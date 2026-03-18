@@ -454,29 +454,54 @@ async function callGemini(messages: any[], temperature: number = 0.0) {
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   if (!GEMINI_API_KEY) throw new Error("VITE_GEMINI_API_KEY not found.");
 
-  const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+  // Protocol 1: OpenAI Compatibility (Fastest, standard)
+  try {
+    const response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gemini-1.5-flash',
+          messages,
+          temperature,
+        }),
+      }
+    );
+
+    if (response.ok) return await response.json();
+  } catch (e) {
+    console.warn("OpenAI Protocol failed, trying Native...");
+  }
+
+  // Protocol 2: Native Google Gemini (Fallback/Safety)
+  const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || "";
+  const responseObj = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GEMINI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemini-1.5-flash',
-        messages,
-        temperature,
+        contents: [{ parts: [{ text: lastUserMsg }] }],
+        generationConfig: { temperature, maxOutputTokens: 1000 }
       }),
     }
   );
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('Gemini Fetch Error:', err);
-    throw new Error(`AI Service Error (${response.status})`);
+  if (!responseObj.ok) {
+    throw new Error(`AI Service Unavailable (${responseObj.status})`);
   }
 
-  return await response.json();
+  const nativeData = await responseObj.json();
+  const text = nativeData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  
+  // Transform native response to look like OpenAI response for compatibility
+  return {
+    choices: [{ message: { content: text } }]
+  };
 }
 
 // ============================================================
