@@ -451,13 +451,14 @@ FORMAT RULES:
 // CORE AI ADAPTER: Centralized fetch for stability
 // ============================================================
 async function callGemini(messages: any[], temperature: number = 0.0) {
-  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!GEMINI_API_KEY) throw new Error("VITE_GEMINI_API_KEY not found.");
+  const rawKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!rawKey) throw new Error("VITE_GEMINI_API_KEY not found.");
+  const GEMINI_API_KEY = rawKey.trim();
 
-  // Protocol 1: OpenAI Compatibility (Fastest, standard)
+  // Protocol 1: Production v1 OpenAI Adapter
   try {
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      'https://generativelanguage.googleapis.com/v1/openai/chat/completions',
       {
         method: 'POST',
         headers: {
@@ -473,17 +474,21 @@ async function callGemini(messages: any[], temperature: number = 0.0) {
     );
 
     if (response.ok) return await response.json();
+    console.warn(`OpenAI v1 fail (${response.status}), trying Native v1...`);
   } catch (e) {
     console.warn("OpenAI Protocol failed, trying Native...");
   }
 
-  // Protocol 2: Native Google Gemini (Fallback/Safety)
+  // Protocol 2: Native Google Gemini v1 (Backup)
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || "";
   const responseObj = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY 
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: lastUserMsg }] }],
         generationConfig: { temperature, maxOutputTokens: 1000 }
@@ -492,13 +497,12 @@ async function callGemini(messages: any[], temperature: number = 0.0) {
   );
 
   if (!responseObj.ok) {
-    throw new Error(`AI Service Unavailable (${responseObj.status})`);
+    throw new Error(`AI Gateway Error (${responseObj.status})`);
   }
 
   const nativeData = await responseObj.json();
   const text = nativeData.candidates?.[0]?.content?.parts?.[0]?.text || "";
   
-  // Transform native response to look like OpenAI response for compatibility
   return {
     choices: [{ message: { content: text } }]
   };
