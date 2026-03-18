@@ -687,6 +687,77 @@ Do not create graphs.`;
   }
 }
 
+// ============================================================
+// EXECUTIVE BRIEFING ENGINE: Generates a formal boardroom report
+// ============================================================
+export async function generateExecutiveBriefing(
+  dataset: ParsedDataset,
+  result: QueryResult,
+  activeFilters: any[]
+): Promise<string> {
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) return "VITE_GEMINI_API_KEY not found.";
+
+  const kpis = result.kpis.map(k => `${k.label}: ${k.value} (${k.change || 'Stable'})`).join('\n');
+  const filters = activeFilters.length > 0 
+    ? activeFilters.map(f => `${f.column} = ${f.value}`).join(', ') 
+    : 'None (Full Dataset)';
+  
+  const chartInsights = result.charts.map(c => `- ${c.title}: ${c.reason}`).join('\n');
+
+  const prompt = `
+    You are a Senior Strategic Consultant reporting to a Board of Directors.
+    Based on the following DataInsight AI dashboard state, generate a PRECISE, PROFESSIONAL EXECUTIVE BRIEFING.
+
+    DASHBOARD METRICS:
+    ${kpis}
+
+    ACTIVE FILTERS:
+    ${filters}
+
+    CHART INSIGHTS:
+    ${chartInsights}
+
+    ALREADY GENERATED INSIGHT:
+    ${result.insight}
+
+    FORMAT REQUIREMENTS:
+    1. EXECUTIVE SUMMARY (2-3 sentences max) - High-level performance.
+    2. KEY PERFORMANCE INDICATORS (Bullet points with values)
+    3. STRATEGIC OBSERVATIONS (At least 2 critical drivers or trends discovered)
+    4. ACTIONABLE RECOMMENDATIONS (One clear next step for management)
+
+    TONE: Formal, Objective, Strategic. No emojis.
+  `.trim();
+
+  try {
+    const response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gemini-1.5-flash',
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1,
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || "Briefing generation failed.";
+  } catch (err) {
+    console.error('Briefing failed:', err);
+    return "Error generating briefing. Please check your connection.";
+  }
+}
+
 // Execute local aggregation (pandas-equivalent)
 function executeAggregation(
   rows: Record<string, any>[],

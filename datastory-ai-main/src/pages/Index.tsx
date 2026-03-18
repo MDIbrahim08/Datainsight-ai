@@ -18,11 +18,13 @@ import {
   parseCSV,
   processQueryWithAI,
   generateSampleDataset,
+  generateExecutiveBriefing,
   isFollowUp,
   isDirectAnswerQuery,
   smartRetrieve,
 } from '@/lib/dataEngine';
 import { Button } from '@/components/ui/button';
+import ExecutiveBriefingModal from '@/components/ExecutiveBriefingModal';
 
 const Index = () => {
   const [dataset, setDataset] = useState<ParsedDataset | null>(null);
@@ -36,6 +38,9 @@ const Index = () => {
   const [pendingQuery, setPendingQuery] = useState('');
   const [loadingMessage, setLoadingMessage] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingText, setBriefingText] = useState<string | null>(null);
+  const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
   const msgIdRef = useRef(0);
 
   const nextId = () => String(++msgIdRef.current);
@@ -194,7 +199,23 @@ const Index = () => {
     setChatMessages([]);
     setPendingQuery('');
     setUploadError(null);
+    setBriefingText(null);
   }, []);
+
+  const handleGenerateBriefing = useCallback(async () => {
+    if (!dataset || !result) return;
+    setBriefingOpen(true);
+    setIsGeneratingBriefing(true);
+    try {
+      const briefing = await generateExecutiveBriefing(dataset, result, result.filters || []);
+      setBriefingText(briefing);
+    } catch (err) {
+      console.error('Briefing generation failed:', err);
+      setBriefingText("Could not generate briefing at this time.");
+    } finally {
+      setIsGeneratingBriefing(false);
+    }
+  }, [dataset, result]);
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden text-foreground">
@@ -208,6 +229,8 @@ const Index = () => {
         colCount={dataset?.columnNames.length}
         onUploadClick={() => setUploadOpen(true)}
         onReset={handleReset}
+        onGenerateBriefing={handleGenerateBriefing}
+        isResultsActive={!!result}
       />
 
       <HeroQuery
@@ -551,6 +574,14 @@ const Index = () => {
         onClose={() => setUploadOpen(false)}
         onFileLoaded={handleFileLoaded}
         error={uploadError}
+      />
+
+      <ExecutiveBriefingModal
+        isOpen={briefingOpen}
+        onClose={() => setBriefingOpen(false)}
+        content={briefingText}
+        isLoading={isGeneratingBriefing}
+        datasetName={datasetName}
       />
 
       {/* Footer */}

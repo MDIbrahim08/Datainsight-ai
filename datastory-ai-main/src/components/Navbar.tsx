@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Upload, Database, Sparkles, RotateCcw } from 'lucide-react';
+import { Upload, Database, Sparkles, RotateCcw, FileText } from 'lucide-react';
 
 import { Button } from './ui/button';
 
@@ -10,9 +10,20 @@ interface NavbarProps {
   colCount?: number;
   onUploadClick: () => void;
   onReset: () => void;
+  onGenerateBriefing?: () => void;
+  isResultsActive?: boolean;
 }
 
-const Navbar = ({ datasetActive, datasetName, rowCount, colCount, onUploadClick, onReset }: NavbarProps) => {
+const Navbar = ({ 
+  datasetActive, 
+  datasetName, 
+  rowCount, 
+  colCount, 
+  onUploadClick, 
+  onReset,
+  onGenerateBriefing,
+  isResultsActive 
+}: NavbarProps) => {
   return (
     <motion.nav
       initial={{ y: -20, opacity: 0 }}
@@ -63,6 +74,18 @@ const Navbar = ({ datasetActive, datasetName, rowCount, colCount, onUploadClick,
                 </span>
               </div>
             </motion.div>
+          )}
+
+          {isResultsActive && onGenerateBriefing && (
+             <Button
+                variant="ghost"
+                onClick={onGenerateBriefing}
+                className="gap-2 font-bold border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary group relative overflow-visible"
+              >
+                <div className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-primary text-[8px] text-white animate-bounce shadow-lg shadow-primary/20">NEW</div>
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Executive Briefing</span>
+              </Button>
           )}
           
           {datasetActive && (
