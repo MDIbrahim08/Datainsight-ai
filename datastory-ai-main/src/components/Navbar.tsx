@@ -81,7 +81,6 @@ const Navbar = ({
                 onClick={onGenerateBriefing}
                 className="gap-2 font-bold relative overflow-visible"
               >
-                <div className="absolute -top-1.5 -right-1.5 px-2 py-0.5 rounded-full bg-red-500 text-[8px] text-white animate-pulse shadow-lg ring-2 ring-background">NEW</div>
                 <FileText className="w-4 h-4" />
                 <span className="hidden sm:inline text-white">Executive Briefing</span>
               </Button>
