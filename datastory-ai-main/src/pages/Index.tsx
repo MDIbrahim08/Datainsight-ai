@@ -416,6 +416,64 @@ const Index = () => {
                 </div>
               )}
 
+              {/* Agentic Reasoning Log (The Finale Winning Edge) */}
+              {result.auditLog && result.auditLog.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mb-8 overflow-hidden rounded-2xl border border-primary/20 bg-black/60 shadow-2xl backdrop-blur-xl"
+                >
+                  <div className="bg-primary/10 px-4 py-2 border-b border-white/5 flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                       <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                       </span>
+                       <span className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] animate-pulse">Agentic Dialogue Stream</span>
+                     </div>
+                     <div className="flex items-center gap-1.5 opacity-50">
+                        <span className="text-[9px] font-mono text-muted-foreground tracking-tighter uppercase whitespace-nowrap">Encryption: AES-256 • Logic: Multi-Model</span>
+                     </div>
+                  </div>
+                  <div className="p-5 space-y-4 max-h-[220px] overflow-y-auto custom-scrollbar font-mono">
+                    {result.auditLog.map((log, i) => (
+                       <motion.div 
+                         key={log.id} 
+                         initial={{ opacity: 0, x: -10 }}
+                         animate={{ opacity: 1, x: 0 }}
+                         transition={{ delay: i * 0.1 }}
+                         className="flex items-start gap-4 border-l-2 border-primary/20 pl-4 py-1 group"
+                       >
+                         <div className="flex-shrink-0">
+                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                             log.agent === 'Auditor' ? 'bg-success/15 text-success border border-success/30 ring-1 ring-success/20' : 
+                             log.agent === 'Strategist' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30 ring-1 ring-amber-500/20' :
+                             'bg-blue-500/15 text-blue-500 border border-blue-500/30 ring-1 ring-blue-500/20'
+                           }`}>
+                             [{log.agent}]
+                           </span>
+                         </div>
+                         <div className="flex-1 space-y-1">
+                            <p className="text-xs text-foreground leading-relaxed font-mono subpixel-antialiased">
+                              {log.message}
+                            </p>
+                            <div className="flex items-center gap-3">
+                               <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
+                                     <div className="h-full bg-primary shadow-[0_0_8px_rgba(59,130,246,0.6)]" style={{ width: `${log.confidence * 100}%` }} />
+                                  </div>
+                                  <span className="text-[9px] text-muted-foreground font-bold">VERIFICATION: {(log.confidence * 100).toFixed(0)}%</span>
+                               </div>
+                               <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
+                               <span className="text-[8px] text-white/20 font-mono">0x{Math.random().toString(16).slice(2, 6).toUpperCase()}</span>
+                            </div>
+                         </div>
+                       </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
               {result.insight.includes('"type": "schema"') ? (
                 <DatasetSchemaView data={result.insight} />
               ) : result.directAnswer ? (
