@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Upload, Database, Sparkles, RotateCcw, FileText } from 'lucide-react';
+import { Upload, Database, Sparkles, RotateCcw, FileText, Volume2, VolumeX } from 'lucide-react';
 
 import { Button } from './ui/button';
 
@@ -12,6 +12,8 @@ interface NavbarProps {
   onReset: () => void;
   onGenerateBriefing?: () => void;
   isResultsActive?: boolean;
+  voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
 }
 
 const Navbar = ({ 
@@ -22,7 +24,9 @@ const Navbar = ({
   onUploadClick, 
   onReset,
   onGenerateBriefing,
-  isResultsActive 
+  isResultsActive,
+  voiceEnabled,
+  onToggleVoice
 }: NavbarProps) => {
   return (
     <motion.nav
@@ -45,10 +49,6 @@ const Navbar = ({
             <span className="text-lg font-bold tracking-tight text-foreground">DataInsight</span>
             <span className="gradient-text text-lg font-extrabold">AI</span>
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 ml-3 px-2.5 py-1 rounded-md bg-secondary/40 border border-border/30">
-            <Sparkles className="w-3 h-3 text-primary/70" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Gemini Powered</span>
-          </div>
         </div>
 
         {/* Right side */}
@@ -70,10 +70,21 @@ const Navbar = ({
                   {datasetName}
                 </span>
                 <span className="text-[10px] text-success/60">
-                  {rowCount?.toLocaleString()} rows • {colCount} cols
+                  {rowCount?.toLocaleString()} rows
                 </span>
               </div>
             </motion.div>
+          )}
+
+          {datasetActive && (
+             <Button
+                variant={voiceEnabled ? "solid" : "ghost"}
+                onClick={onToggleVoice}
+                className={`gap-2 font-bold px-4 ${voiceEnabled ? 'bg-primary/20 text-primary border border-primary/30 ring-2 ring-primary/20' : ''}`}
+              >
+                {voiceEnabled ? <Volume2 className="w-4 h-4 animate-pulse" /> : <VolumeX className="w-4 h-4" />}
+                <span className="hidden sm:inline">Voice Sync</span>
+              </Button>
           )}
 
           {isResultsActive && onGenerateBriefing && (
@@ -101,7 +112,7 @@ const Navbar = ({
             onClick={onUploadClick}
           >
             <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Upload CSV</span>
+            <span className="hidden sm:inline">Upload</span>
           </Button>
         </div>
       </div>

@@ -127,32 +127,52 @@ const ExecutiveBriefingModal = ({
             className="relative w-full max-w-4xl max-h-[90vh] glass-card rounded-3xl border border-primary/20 shadow-2xl overflow-hidden flex flex-col print:shadow-none print:border-none print:bg-white print:text-black print:max-h-full print:relative print:scale-100"
           >
             {/* Header */}
-            <div className="p-8 border-b border-border/40 flex items-center justify-between bg-primary/5 print:bg-transparent print:border-black">
+            <div className="p-8 border-b border-border/40 flex items-center justify-between bg-primary/5 print:hidden">
               <div className="flex items-center gap-6">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner print:hidden">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
                   <TrendingUp className="w-8 h-8 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight text-foreground print:text-black print:text-4xl">Executive Strategic Briefing</h2>
+                  <h2 className="text-2xl font-black tracking-tight text-foreground">Executive Strategic Briefing</h2>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold print:text-black/60">
+                    <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">
                       AI-Synthesized for Board of Directors
                     </span>
-                    <div className="w-1 h-1 rounded-full bg-primary print:hidden" />
-                    <span className="text-[10px] text-primary/70 font-mono print:text-black/40">DS-REVISION: 1.0.4</span>
+                    <div className="w-1 h-1 rounded-full bg-primary" />
+                    <span className="text-[10px] text-primary/70 font-mono">DS-REVISION: 1.1.0 (FINALE)</span>
                   </div>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="w-12 h-12 rounded-2xl hover:bg-secondary/50 flex items-center justify-center transition-all hover:rotate-90 print:hidden"
+                className="w-12 h-12 rounded-2xl hover:bg-secondary/50 flex items-center justify-center transition-all hover:rotate-90"
               >
                 <X className="w-6 h-6 text-muted-foreground" />
               </button>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-card/10 print:overflow-visible print:bg-transparent print:p-16">
+            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-card/10 print:overflow-visible print:bg-white print:p-0">
+              
+              {/* PRINT COVER PAGE - ONLY VISIBLE ON PRINT */}
+              <div className="hidden print:block mb-20 text-center py-20 border-b-8 border-primary">
+                 <div className="flex justify-center mb-8">
+                    <TrendingUp className="w-24 h-24 text-primary" />
+                 </div>
+                 <h1 className="text-6xl font-black text-black mb-4 uppercase tracking-tighter">Strategic Analysis</h1>
+                 <h2 className="text-2xl font-bold text-gray-500 mb-20 tracking-widest uppercase">DataInsight AI • {datasetName}</h2>
+                 <div className="flex justify-center gap-10 mt-32">
+                    <div className="text-left border-l-4 border-primary pl-6">
+                       <p className="text-xs font-bold text-gray-400 uppercase">Compiled For</p>
+                       <p className="text-lg font-black text-black uppercase">Board of Directors</p>
+                    </div>
+                    <div className="text-left border-l-4 border-gray-200 pl-6">
+                       <p className="text-xs font-bold text-gray-400 uppercase">Issue Date</p>
+                       <p className="text-lg font-black text-black uppercase">{new Date().toLocaleDateString()}</p>
+                    </div>
+                 </div>
+              </div>
+
               {isLoading ? (
                 <div className="py-24 flex flex-col items-center justify-center space-y-6">
                   <div className="relative">
@@ -171,24 +191,28 @@ const ExecutiveBriefingModal = ({
                   className="max-w-none print:text-black"
                 >
                    {/* Strategic Scorecard */}
-                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10 print:hidden">
+                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10 print:grid-cols-2 print:gap-8 print:mb-16">
                      {kpis.slice(0, 4).map((kpi, i) => (
-                       <div key={i} className="p-4 rounded-2xl bg-secondary/5 border border-border/50 shadow-sm">
-                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-                         <p className="text-lg font-black text-foreground mt-1">{kpi.value}</p>
+                       <div key={i} className="p-4 rounded-2xl bg-secondary/5 border border-border/50 shadow-sm print:bg-gray-50 print:border-gray-200">
+                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider print:text-gray-500">{kpi.label}</p>
+                         <p className="text-lg font-black text-foreground mt-1 print:text-black print:text-2xl">{kpi.value}</p>
                        </div>
                      ))}
                    </div>
 
                    {/* Strategic Visualization */}
-                   {renderFailsafeChart()}
+                   <div className="print:mt-12">
+                     <h2 className="hidden print:block text-2xl font-black text-black mb-6 uppercase tracking-widest pl-4 border-l-4 border-primary">Primary Data Analysis</h2>
+                     {renderFailsafeChart()}
+                   </div>
 
                    <div className="flex items-center gap-2 mb-10 bg-success/10 border border-success/20 px-4 py-3 rounded-2xl w-fit shadow-sm print:hidden">
                     <ShieldCheck className="w-5 h-5 text-success" />
                     <span className="text-[11px] font-black text-success uppercase tracking-widest">Verified Tactical Intelligence</span>
                   </div>
 
-                  <div className="space-y-10 text-lg text-foreground/90 font-medium leading-relaxed font-sans subpixel-antialiased print:text-black print:text-xl">
+                  <div className="space-y-10 text-lg text-foreground/90 font-medium leading-relaxed font-sans subpixel-antialiased print:text-black print:text-xl print:mt-10">
+                    <h2 className="hidden print:block text-2xl font-black text-black mb-10 uppercase tracking-widest pl-4 border-l-4 border-primary">Strategic Insights & Narratives</h2>
                     {/* Render with much cleaner logic */}
                     {content.split('#').map((section, idx) => {
                       if (!section.trim()) return null;
@@ -197,12 +221,12 @@ const ExecutiveBriefingModal = ({
                       const body = lines.slice(1).join('\n');
                       
                       return (
-                        <div key={idx} className="group">
-                          <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
+                        <div key={idx} className="group break-inside-avoid mb-10">
+                          <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-3 print:text-black">
                             <div className="w-8 h-[2px] bg-primary group-hover:w-12 transition-all print:bg-black" />
                             {title}
                           </h3>
-                          <div className="text-foreground/80 pl-11 whitespace-pre-line group-hover:text-foreground transition-colors print:text-black print:pl-0">
+                          <div className="text-foreground/80 pl-11 whitespace-pre-line group-hover:text-foreground transition-colors print:text-gray-700 print:pl-6 print:border-l print:border-gray-100">
                             {body}
                           </div>
                         </div>
@@ -210,12 +234,12 @@ const ExecutiveBriefingModal = ({
                     })}
                   </div>
 
-                  <div className="mt-20 pt-10 border-t border-border/20 text-center flex items-center justify-between print:border-black/20 print:mt-12">
+                  <div className="mt-20 pt-10 border-t border-border/20 text-center flex items-center justify-between print:border-black/20 print:mt-24 print:pt-10">
                      <p className="text-[10px] text-muted-foreground font-mono uppercase print:text-black/40">
-                      Generated by DataInsight AI • {datasetName}
+                      Authored by DataInsight AI • FINALE REVISION
                     </p>
                      <p className="text-[10px] text-muted-foreground font-sans font-bold uppercase print:text-black/40">
-                      Confidential • Board Access Only
+                      Proprietary Intelligence • Board Grade
                     </p>
                   </div>
                 </motion.div>

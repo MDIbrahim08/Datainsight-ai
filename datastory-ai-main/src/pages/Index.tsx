@@ -38,7 +38,27 @@ const Index = () => {
   const [pendingQuery, setPendingQuery] = useState('');
   const [loadingMessage, setLoadingMessage] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+
+  // AI Voice Feedback (Finale Upgrade)
+  const speakInsight = (text: string) => {
+    if (!voiceEnabled) return;
+    // Cancel any current speaking
+    window.speechSynthesis.cancel();
+    
+    const msg = new SpeechSynthesisUtterance();
+    msg.text = text.replace(/[*_#]/g, ''); // Clean markdown
+    msg.rate = 1.05;
+    msg.pitch = 1.0;
+    
+    // Pick a professional sounding voice
+    const voices = window.speechSynthesis.getVoices();
+    const targetVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en')) || voices[0];
+    if (targetVoice) msg.voice = targetVoice;
+    
+    window.speechSynthesis.speak(msg);
+  };
   const [briefingText, setBriefingText] = useState<string | null>(null);
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
   const msgIdRef = useRef(0);
@@ -126,6 +146,14 @@ const Index = () => {
       const queryResult = await processQueryWithAI(query, dataset, followUp);
 
       setResult(queryResult);
+      
+      // Auto-speak the insight (Finale Upgrade)
+      if (queryResult.directAnswer) {
+        speakInsight(queryResult.directAnswer);
+      } else if (queryResult.insight) {
+        speakInsight(queryResult.insight);
+      }
+
       setPendingQuery('');
       setLastState({
         query,
@@ -204,7 +232,7 @@ const Index = () => {
 
   const handleGenerateBriefing = useCallback(async () => {
     if (!dataset || !result) return;
-    setBriefingOpen(true);
+    setIsBriefingOpen(true);
     setIsGeneratingBriefing(true);
     try {
       const briefing = await generateExecutiveBriefing(dataset, result, result.filters || []);
@@ -231,6 +259,8 @@ const Index = () => {
         onReset={handleReset}
         onGenerateBriefing={handleGenerateBriefing}
         isResultsActive={!!result}
+        voiceEnabled={voiceEnabled}
+        onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
       />
 
       <HeroQuery
@@ -616,8 +646,8 @@ const Index = () => {
       />
 
       <ExecutiveBriefingModal
-        isOpen={briefingOpen}
-        onClose={() => setBriefingOpen(false)}
+        isOpen={isBriefingOpen}
+        onClose={() => setIsBriefingOpen(false)}
         content={briefingText}
         isLoading={isGeneratingBriefing}
         datasetName={datasetName}
